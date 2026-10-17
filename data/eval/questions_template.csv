@@ -1,0 +1,4 @@
+question_id,question,gold_answer,gold_doc,gold_snippet
+q001,Who is eligible for <scheme name>?,<short correct answer>,<filename.pdf>,<exact sentence from the document that proves it>
+q002,How much benefit does <scheme name> provide?,<amount and frequency>,<filename.pdf>,<exact sentence>
+q003,What documents are needed to apply for <scheme name>?,<list>,<filename.pdf>,<exact sentence>
