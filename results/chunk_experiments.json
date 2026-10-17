@@ -1,0 +1,38 @@
+[
+  {
+    "chunk_chars": 500,
+    "top_k": 3,
+    "num_chunks": 62,
+    "hit_rate": 1.0
+  },
+  {
+    "chunk_chars": 500,
+    "top_k": 5,
+    "num_chunks": 62,
+    "hit_rate": 1.0
+  },
+  {
+    "chunk_chars": 800,
+    "top_k": 3,
+    "num_chunks": 33,
+    "hit_rate": 1.0
+  },
+  {
+    "chunk_chars": 800,
+    "top_k": 5,
+    "num_chunks": 33,
+    "hit_rate": 1.0
+  },
+  {
+    "chunk_chars": 1200,
+    "top_k": 3,
+    "num_chunks": 23,
+    "hit_rate": 1.0
+  },
+  {
+    "chunk_chars": 1200,
+    "top_k": 5,
+    "num_chunks": 23,
+    "hit_rate": 1.0
+  }
+]

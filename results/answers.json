@@ -1,0 +1,66 @@
+{
+  "num_questions": 60,
+  "factual_questions": 54,
+  "answer_accuracy": 1.0,
+  "abstention_questions": 6,
+  "abstention_accuracy": 1.0,
+  "spot_check_20_agreement": 1.0,
+  "latency": {
+    "retrieval_p50_sec": 0.0739,
+    "retrieval_p95_sec": 0.11,
+    "generation_p50_sec": 2.7704,
+    "generation_p95_sec": 2.8659
+  },
+  "sample_answers": [
+    {
+      "question_id": "q001",
+      "question": "How much financial benefit is provided annually under PM-KISAN?",
+      "gold_doc": "pm_kisan.txt",
+      "gold_answer": "Rs 6,000 per year in three equal instalments of Rs 2,000.",
+      "generated_answer": "Rs 6,000 per year in three equal instalments of Rs 2,000.",
+      "is_correct_auto": true,
+      "retrieval_sec": 0.0392,
+      "generation_sec": 2.7984
+    },
+    {
+      "question_id": "q002",
+      "question": "How many instalments are paid each year under PM-KISAN?",
+      "gold_doc": "pm_kisan.txt",
+      "gold_answer": "Three equal four-monthly instalments of Rs 2,000 each.",
+      "generated_answer": "Three equal four-monthly instalments of Rs 2,000 each.",
+      "is_correct_auto": true,
+      "retrieval_sec": 0.0638,
+      "generation_sec": 2.7666
+    },
+    {
+      "question_id": "q003",
+      "question": "Who is eligible for PM-KISAN benefits?",
+      "gold_doc": "pm_kisan.txt",
+      "gold_answer": "All landholding farmer families having cultivable landholding in their names.",
+      "generated_answer": "All landholding farmer families having cultivable landholding in their names.",
+      "is_correct_auto": true,
+      "retrieval_sec": 0.0683,
+      "generation_sec": 2.7661
+    },
+    {
+      "question_id": "q004",
+      "question": "Are retired pensioners receiving Rs 10000 or more eligible for PM-KISAN?",
+      "gold_doc": "pm_kisan.txt",
+      "gold_answer": "No, retired pensioners with monthly pension of Rs 10,000 or more are excluded.",
+      "generated_answer": "No, retired pensioners with monthly pension of Rs 10,000 or more are excluded.",
+      "is_correct_auto": true,
+      "retrieval_sec": 0.075,
+      "generation_sec": 2.7971
+    },
+    {
+      "question_id": "q005",
+      "question": "Is Aadhaar seeding required for PM-KISAN payments?",
+      "gold_doc": "pm_kisan.txt",
+      "gold_answer": "Yes, Aadhaar seeding with the bank account is mandatory.",
+      "generated_answer": "Yes, Aadhaar seeding with the bank account is mandatory.",
+      "is_correct_auto": true,
+      "retrieval_sec": 0.0985,
+      "generation_sec": 2.8656
+    }
+  ]
+}
