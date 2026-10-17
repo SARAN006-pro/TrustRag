@@ -1,0 +1,25 @@
+Pradhan Mantri Kisan Samman Nidhi (PM-KISAN)
+
+1. Scheme Overview:
+PM-KISAN is a Central Sector Scheme launched by the Government of India to provide income support to all landholding farmers' families in the country. The scheme became operational on 1st December 2018.
+
+2. Financial Benefits:
+Under the PM-KISAN scheme, an income support of Rs 6,000 per year is provided to all eligible landholding farmer families. The financial benefit is payable in three equal four-monthly instalments of Rs 2,000 each. The amount is directly transferred into the bank accounts of the beneficiaries through Direct Benefit Transfer (DBT) mode.
+
+3. Eligibility Criteria:
+All landholding farmer families having cultivable landholding in their names are eligible for the benefit under the scheme. A landholding farmer family is defined as a family consisting of husband, wife, and minor children who own cultivable land as per the land records of the concerned State or Union Territory.
+
+4. Exclusions:
+The following categories of beneficiaries of higher economic status are not eligible for benefits under the scheme:
+(a) All Institutional Landholders.
+(b) Farmer families in which one or more members belong to the following categories:
+- Former and present holders of constitutional posts.
+- Former and present Ministers, State Ministers, and former or present Members of Lok Sabha, Rajya Sabha, State Legislative Assemblies, or State Legislative Councils.
+- Former and present Mayors of Municipal Corporations, and former or present Chairpersons of District Panchayats.
+- All serving or retired officers and employees of Central or State Government Ministries, Departments, and Field Units, Central or State PSEs, and Autonomous Institutions under Government. Regular employees of Local Bodies are also excluded (excluding Multi Tasking Staff / Class IV / Group D employees).
+- All superannuated or retired pensioners whose monthly pension is Rs 10,000 or more (excluding Multi Tasking Staff / Class IV / Group D employees).
+- All persons who paid Income Tax in the last assessment year.
+- Professionals like Doctors, Engineers, Lawyers, Chartered Accountants, and Architects registered with Professional bodies.
+
+5. Mandatory Requirements:
+Beneficiaries must have an Aadhaar card. Aadhaar seeding with the bank account is mandatory for receiving the financial instalments. eKYC is mandatory for all PM-KISAN registered farmers.
