@@ -1,0 +1,92 @@
+{
+  "dataset": {
+    "total_rows": 203,
+    "train_rows": 158,
+    "test_rows": 45,
+    "train_questions": 75,
+    "test_questions": 19
+  },
+  "models": {
+    "Baseline": {
+      "test_precision": 0.5778,
+      "test_recall": 1.0,
+      "test_f1": 0.7324,
+      "test_roc_auc": 0.5,
+      "confusion_matrix": [
+        [
+          0,
+          19
+        ],
+        [
+          0,
+          26
+        ]
+      ],
+      "cv_5fold_f1_mean": 0.6987,
+      "cv_5fold_f1_std": 0.0067,
+      "cv_5fold_roc_mean": 0.5,
+      "cv_5fold_roc_std": 0.0
+    },
+    "LogisticRegression": {
+      "test_precision": 1.0,
+      "test_recall": 0.9231,
+      "test_f1": 0.96,
+      "test_roc_auc": 0.9939,
+      "confusion_matrix": [
+        [
+          19,
+          0
+        ],
+        [
+          2,
+          24
+        ]
+      ],
+      "cv_5fold_f1_mean": 0.914,
+      "cv_5fold_f1_std": 0.0255,
+      "cv_5fold_roc_mean": 0.966,
+      "cv_5fold_roc_std": 0.0096
+    },
+    "RandomForest": {
+      "test_precision": 1.0,
+      "test_recall": 0.9231,
+      "test_f1": 0.96,
+      "test_roc_auc": 0.9919,
+      "confusion_matrix": [
+        [
+          19,
+          0
+        ],
+        [
+          2,
+          24
+        ]
+      ],
+      "cv_5fold_f1_mean": 0.9339,
+      "cv_5fold_f1_std": 0.0294,
+      "cv_5fold_roc_mean": 0.964,
+      "cv_5fold_roc_std": 0.0141
+    },
+    "GradientBoosting": {
+      "test_precision": 1.0,
+      "test_recall": 0.9231,
+      "test_f1": 0.96,
+      "test_roc_auc": 0.9929,
+      "confusion_matrix": [
+        [
+          19,
+          0
+        ],
+        [
+          2,
+          24
+        ]
+      ],
+      "cv_5fold_f1_mean": 0.9247,
+      "cv_5fold_f1_std": 0.0224,
+      "cv_5fold_roc_mean": 0.9501,
+      "cv_5fold_roc_std": 0.0265
+    }
+  },
+  "best_model": "LogisticRegression"
+}

@@ -1,0 +1,11 @@
+{
+  "token_precision": -0.5096,
+  "sentence_support_mean": -0.2248,
+  "sentence_support_min": -1.0823,
+  "numbers_in_answer": 0.5826,
+  "unsupported_number_ratio": 1.5008,
+  "negation_mismatch": 0.3799,
+  "length_ratio": 0.762,
+  "is_abstention": -1.7112,
+  "embed_sim": -0.214
+}
