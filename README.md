@@ -84,6 +84,11 @@ python -m trustrag.evaluate
 
 # Start FastAPI server
 uvicorn trustrag.api:app --host 0.0.0.0 --port 8000
+
+# Start Frontend interface (in a separate terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
 ---
