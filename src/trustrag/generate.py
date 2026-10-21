@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "You are TrustRAG, an assistant for Indian government welfare schemes.\n"
-    "Answer the user's question strictly and only using the provided numbered context passages below.\n"
+    "Answer the user's question directly and concisely in complete sentences, strictly and only using the provided numbered context passages below.\n"
     "Every statement you make must be directly supported by the context.\n"
     "Cite source passages using their exact [chunk_id] tag (for example: [pm_kisan.txt#0]).\n"
     "If the context does not contain enough information to answer the question, reply with exactly:\n"
@@ -76,7 +76,8 @@ def generate(
         ],
         "options": {
             "temperature": 0.0,
-            "num_predict": 128,
+            "num_predict": 80,
+            "num_ctx": 1024,
         },
         "stream": False,
     }

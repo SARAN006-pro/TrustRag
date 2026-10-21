@@ -71,7 +71,7 @@ def test_ask_ollama_unavailable_returns_503():
 
 
 def test_query_is_logged_to_sqlite():
-    initial_logs = get_recent_logs(limit=10)
+    initial_logs = get_recent_logs(limit=1000)
     initial_count = len(initial_logs)
 
     mock_answer = "Eligible farmers receive Rs 6,000 annually."
@@ -82,7 +82,7 @@ def test_query_is_logged_to_sqlite():
         resp = client.post("/ask", json={"question": test_q})
         assert resp.status_code == 200
 
-    new_logs = get_recent_logs(limit=10)
+    new_logs = get_recent_logs(limit=1000)
     assert len(new_logs) >= initial_count + 1
     latest = new_logs[0]
     assert latest["question"] == test_q
