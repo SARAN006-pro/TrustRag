@@ -10,4 +10,5 @@ chroma_experiments/
 models/*.joblib
 frontend/node_modules/
 frontend/dist/
+data/backup_v1/
 

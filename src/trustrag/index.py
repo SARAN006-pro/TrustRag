@@ -1,8 +1,9 @@
-"""Index chunks into ChromaDB vector store.
+"""Index chunks into workspace-partitioned ChromaDB vector store.
 
-Embeds chunks from CONFIG.chunks_path using CONFIG.embed_model
-and persists the index in CONFIG.chroma_dir with cosine distance.
-Rebuilding is idempotent.
+V2 features:
+- workspace_id is strictly required (no global default).
+- Uses VectorStore and EmbeddingProvider interfaces.
+- Non-destructive migration of v1 data to 'default' workspace.
 """
 from __future__ import annotations
 
@@ -12,9 +13,15 @@ from pathlib import Path
 from typing import Any
 
 import chromadb
-from sentence_transformers import SentenceTransformer
 
 from trustrag.config import CONFIG
+from trustrag.db import init_db
+from trustrag.vectorstore import (
+    EmbeddingProvider,
+    VectorStore,
+    get_default_embedding_provider,
+    get_default_vector_store,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -29,12 +36,39 @@ def get_chroma_client(chroma_dir: Path = CONFIG.chroma_dir) -> chromadb.Persiste
     return chromadb.PersistentClient(path=str(chroma_dir))
 
 
-def build_index(
-    chunks_path: Path = CONFIG.chunks_path,
-    chroma_dir: Path = CONFIG.chroma_dir,
-    embed_model_name: str = CONFIG.embed_model,
+def index_chunks(
+    chunks: list[dict[str, Any]],
+    workspace_id: str | None = None,
+    vector_store: VectorStore | None = None,
+    embedding_provider: EmbeddingProvider | None = None,
 ) -> int:
-    """Read chunks from chunks.jsonl, embed them, and index into ChromaDB idempotently."""
+    """Index a list of chunks into the required workspace."""
+    if workspace_id is None or not str(workspace_id).strip():
+        raise ValueError("workspace_id is required; there is no global default")
+
+    ws_id = str(workspace_id).strip()
+    if not chunks:
+        return 0
+
+    store = vector_store or get_default_vector_store()
+    emb_provider = embedding_provider or get_default_embedding_provider()
+
+    texts = [c["text"] for c in chunks]
+    embeddings = emb_provider.embed_texts(texts)
+    return store.add(workspace_id=ws_id, chunks=chunks, embeddings=embeddings)
+
+
+def build_index(
+    workspace_id: str | None = None,
+    chunks_path: Path = CONFIG.chunks_path,
+    vector_store: VectorStore | None = None,
+    embedding_provider: EmbeddingProvider | None = None,
+) -> int:
+    """Read chunks from chunks.jsonl and index into the specified workspace."""
+    if workspace_id is None or not str(workspace_id).strip():
+        raise ValueError("workspace_id is required; there is no global default")
+
+    ws_id = str(workspace_id).strip()
     chunks_path = Path(chunks_path)
     if not chunks_path.exists():
         raise FileNotFoundError(f"Chunks file not found at {chunks_path}. Run ingest first.")
@@ -50,50 +84,29 @@ def build_index(
         logger.warning(f"No chunks found in {chunks_path}")
         return 0
 
-    logger.info(f"Loading embedding model: {embed_model_name}")
-    model = SentenceTransformer(embed_model_name)
-
-    logger.info(f"Connecting to ChromaDB at: {chroma_dir}")
-    client = get_chroma_client(chroma_dir)
-
-    # Idempotent rebuild: delete collection if exists
-    existing = [c.name for c in client.list_collections()]
-    if COLLECTION_NAME in existing:
-        logger.info(f"Deleting existing collection '{COLLECTION_NAME}' for clean rebuild")
-        client.delete_collection(COLLECTION_NAME)
-
-    collection = client.create_collection(
-        name=COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"},
+    return index_chunks(
+        chunks=chunks,
+        workspace_id=ws_id,
+        vector_store=vector_store,
+        embedding_provider=embedding_provider,
     )
 
-    texts = [c["text"] for c in chunks]
-    ids = [c["chunk_id"] for c in chunks]
-    metadatas = [
-        {
-            "chunk_id": c["chunk_id"],
-            "doc": c["doc"],
-            "page": c["page"] if c["page"] is not None else -1,
-            "char_start": c["char_start"],
-        }
-        for c in chunks
-    ]
 
-    logger.info(f"Computing embeddings for {len(texts)} chunks...")
-    embeddings = model.encode(texts, batch_size=32, show_progress_bar=False, normalize_embeddings=True).tolist()
+def migrate_v1_to_default() -> int:
+    """Migrate existing v1 chunks into the 'default' workspace without deleting v1 data."""
+    init_db()
+    store = get_default_vector_store()
+    existing_count = store.count("default")
+    if existing_count > 0:
+        logger.info(f"Workspace 'default' already contains {existing_count} chunks. Migration skipped.")
+        return existing_count
 
-    logger.info(f"Inserting {len(ids)} chunks into ChromaDB collection '{COLLECTION_NAME}'...")
-    collection.add(
-        ids=ids,
-        documents=texts,
-        metadatas=metadatas,
-        embeddings=embeddings,
-    )
-
-    count = collection.count()
-    logger.info(f"Successfully indexed {count} chunks in ChromaDB")
+    logger.info("Migrating v1 chunks into workspace 'default'...")
+    count = build_index(workspace_id="default")
+    logger.info(f"Migration complete: {count} chunks indexed into 'default'.")
     return count
 
 
 if __name__ == "__main__":
-    build_index()
+    count = migrate_v1_to_default()
+    print(f"Default workspace chunk count: {count}")

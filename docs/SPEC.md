@@ -86,3 +86,39 @@ Writes `results/retrieval.json` and `results/answers.json`:
 - `uvicorn trustrag.api:app` answers a real question end-to-end using real documents and a real Ollama model.
 - README lists exact commands, real metrics copied from `results/`, and a Limitations section.
 - Known limits are documented honestly (small self-built dataset, synthetic corruptions, 3B model quality).
+
+## 11. V2 Architecture: Workspaces, Interfaces, and Privacy (V2 Extension)
+
+### 11.1 Workspaces and Multi-Tenant Isolation
+- **Storage Isolation**: Every workspace maintains its own isolated ChromaDB collection named `ws_<workspace_id>` (sanitized).
+- **No Global Default**: All retrieval, indexing, and deletion operations strictly REQUIRE an explicit `workspace_id`. Calling any retrieval or index operation without a `workspace_id` raises a `ValueError`.
+- **Workspaces Registry**: SQLite `workspaces` table tracks configured workspaces:
+  `id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, privacy TEXT NOT NULL CHECK(privacy IN ('private', 'shared'))`
+- **V1 Backward Compatibility**: Existing V1 scheme documents are migrated non-destructively into workspace `'default'`.
+
+### 11.2 VectorStore and EmbeddingProvider Interfaces
+- `VectorStore` (ABC):
+  - `add(workspace_id, chunks, embeddings) -> int`
+  - `query(workspace_id, query_embedding, k) -> list[chunk_dict]`
+  - `delete_by_source(workspace_id, source_doc) -> int`
+  - `count(workspace_id) -> int`
+  - Default implementation: `ChromaVectorStore` persisting to `CONFIG.chroma_dir`.
+- `EmbeddingProvider` (ABC):
+  - `embed_texts(texts: list[str]) -> list[list[float]]`
+  - `embed_query(query: str) -> list[float]`
+  - Default implementation: `SentenceTransformerEmbedding` using `CONFIG.embed_model`.
+
+### 11.3 LLMProvider Interface
+- `LLMProvider` (ABC):
+  - `name: str`
+  - `is_hosted: bool`
+  - `generate(messages: list[dict], **opts) -> {"text": str, "usage": dict}`
+  - `stream(messages: list[dict], **opts) -> Iterator[str]`
+  - `astream(messages: list[dict], **opts) -> AsyncIterator[str]`
+- Implementations:
+  - `OllamaProvider`: Local, non-hosted (`is_hosted = False`). Default model from `CONFIG.llm_model`.
+  - `OpenAICompatibleProvider`: Hosted (`is_hosted = True`). Base URL and API key loaded strictly from environment variables (`OPENAI_BASE_URL`, `OPENAI_API_KEY`).
+
+### 11.4 Privacy Enforcement
+- **Rule**: A workspace configured with `privacy="private"` strictly refuses hosted providers (`provider.is_hosted == True`) and raises `PrivacyViolationError` unless the environment variable `ALLOW_HOSTED_FOR_PRIVATE=true` is explicitly set.
+- **Secret Isolation**: Provider credentials and API keys are never written to SQLite logs, disk files, error strings, or API responses. Any potential secret patterns in exceptions are sanitized and masked as `[REDACTED]`.

@@ -1,12 +1,12 @@
-"""FastAPI service for TrustRAG.
+"""FastAPI service for TrustRAG with workspace isolation and privacy enforcement.
 
 Endpoints per SPEC section 9 & extensions:
 - GET /health -> {status, ollama_reachable, index_chunks, model_loaded}
 - GET /providers -> List of supported LLM backends & config options
 - POST /ask -> {answer, sources, grounded, risk_score, latency_ms}
 - POST /ask/stream -> Server-Sent Events (SSE) streaming tokens & verification
-- Honest errors: 503 for LLM unavailable, 401 for bad key, 422 for invalid question length.
-- SQLite query logging for every request (with isolated, non-persisted user keys).
+- Honest errors: 503 for LLM unavailable, 403 for privacy violation, 422 for invalid question length.
+- SQLite query logging with workspace_id tracking.
 """
 from __future__ import annotations
 
@@ -26,14 +26,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
 from trustrag.config import CONFIG
-from trustrag.db import init_db, log_query
+from trustrag.db import init_db, log_query, get_workspace
 from trustrag.generate import LLMBackendError, generate, format_context
-from trustrag.index import COLLECTION_NAME, get_chroma_client
+from trustrag.vectorstore import get_default_vector_store
 from trustrag.llm import (
     ABSTENTION_ANSWER,
     LLMAuthError,
     LLMError,
     LLMRateLimitError,
+    PrivacyViolationError,
+    check_workspace_privacy,
     get_available_providers_info,
     get_llm_provider,
 )
@@ -45,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="TrustRAG API",
-    description="Grounded Q&A over Indian Government Schemes with Verification & Multi-Provider LLMs",
+    description="Grounded Q&A over Indian Government Schemes with Verification, Workspaces & Privacy Enforcement",
     version="2.0.0",
 )
 
@@ -61,7 +63,8 @@ app.add_middleware(
 
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=500, description="User question between 1 and 500 characters")
-    provider: str = Field(default="ollama", description="LLM provider: ollama, openai, groq, openrouter, anthropic, gemini, openai_compatible")
+    workspace_id: str = Field(default="default", description="Workspace identifier (default: 'default')")
+    provider: str = Field(default="ollama", description="LLM provider: 'ollama' or 'openai_compatible'")
     model: str | None = Field(default=None, description="Optional custom model name")
     api_key: str | None = Field(default=None, description="Optional ephemeral API key (never stored or logged)")
     base_url: str | None = Field(default=None, description="Optional custom endpoint base URL")
@@ -117,12 +120,11 @@ def health() -> HealthResponse:
     except Exception:
         ollama_ok = False
 
-    # 2. ChromaDB index chunks count
+    # 2. ChromaDB default workspace chunks count
     index_count = 0
     try:
-        client = get_chroma_client(CONFIG.chroma_dir)
-        coll = client.get_collection(COLLECTION_NAME)
-        index_count = coll.count()
+        store = get_default_vector_store()
+        index_count = store.count("default")
     except Exception:
         index_count = 0
 
@@ -156,21 +158,41 @@ def ask(
     x_llm_key: str | None = Header(default=None, alias="X-LLM-Key"),
     x_llm_provider: str | None = Header(default=None, alias="X-LLM-Provider"),
 ) -> AskResponse:
-    """Process a user query, retrieve relevant scheme chunks, generate answers with citations,
+    """Process a user query in a workspace, retrieve relevant chunks, generate answers with citations,
     and verify groundedness with the trained classifier.
     """
     start_time = time.perf_counter()
     question = req.question
-
+    workspace_id = req.workspace_id or "default"
     provider_name = req.provider or x_llm_provider or "ollama"
     effective_api_key = req.api_key or x_llm_key
 
-    # 1. Retrieve top-k chunks
-    chunks = retrieve(question, k=CONFIG.top_k)
+    # Initialize provider
+    try:
+        llm = get_llm_provider(
+            provider_name=provider_name,
+            model=req.model,
+            api_key=effective_api_key,
+            base_url=req.base_url,
+        )
+        # Check workspace privacy rule
+        check_workspace_privacy(workspace_id, llm)
+    except PrivacyViolationError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except LLMAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except LLMError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
-    # 2. Generate answer with selected provider
+    # 1. Retrieve top-k chunks from the specific workspace
+    try:
+        chunks = retrieve(question, workspace_id=workspace_id, k=CONFIG.top_k)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    # 2. Generate answer
     if provider_name == "ollama" and req.model is None and req.base_url is None and effective_api_key is None:
-        # Default path keeps backward compatibility with mocked tests
+        # Default backward-compatible path
         try:
             answer, raw_sources = generate(question, chunks)
         except LLMBackendError as exc:
@@ -186,21 +208,18 @@ def ask(
                 detail="LLM backend unavailable",
             ) from exc
     else:
-        # Multi-provider path
         if not chunks:
             answer = ABSTENTION_ANSWER
             raw_sources = []
         else:
             try:
-                llm = get_llm_provider(
-                    provider_name=provider_name,
-                    model=req.model,
-                    api_key=effective_api_key,
-                    base_url=req.base_url,
-                )
                 context_str = format_context(chunks)
-                user_prompt = f"Context passages:\n{context_str}\n\nQuestion: {question.strip()}"
-                answer = llm.generate(user_prompt)
+                messages = [
+                    {"role": "system", "content": "You are TrustRAG, an assistant for Indian government welfare schemes. Answer directly and concisely based strictly on the context below. Cite sources as [chunk_id]."},
+                    {"role": "user", "content": f"Context passages:\n{context_str}\n\nQuestion: {question.strip()}"},
+                ]
+                res = llm.generate(messages)
+                answer = res.get("text", "")
                 raw_sources = [
                     {
                         "chunk_id": c["chunk_id"],
@@ -212,16 +231,12 @@ def ask(
                     for c in chunks
                 ]
             except LLMAuthError as exc:
-                logger.error(f"Auth error with {provider_name}: {exc}")
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
             except LLMRateLimitError as exc:
-                logger.error(f"Rate limit for {provider_name}: {exc}")
                 raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
             except LLMError as exc:
-                logger.error(f"Provider {provider_name} error: {exc}")
                 raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
             except Exception as exc:
-                logger.error(f"Unexpected multi-provider failure: {exc}")
                 raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"LLM failure: {exc}") from exc
 
     # 3. Groundedness verification
@@ -230,13 +245,14 @@ def ask(
     # 4. Compute latency
     latency_ms = int((time.perf_counter() - start_time) * 1000)
 
-    # 5. Log to SQLite (never stores user API keys)
+    # 5. Log to SQLite with workspace_id (never stores user API keys)
     log_query(
         question=question,
         answer=answer,
         grounded=grounded,
         risk_score=risk_score,
         latency_ms=latency_ms,
+        workspace_id=workspace_id,
     )
 
     sources = [
@@ -266,16 +282,9 @@ async def ask_stream(
     x_llm_key: str | None = Header(default=None, alias="X-LLM-Key"),
     x_llm_provider: str | None = Header(default=None, alias="X-LLM-Provider"),
 ) -> StreamingResponse:
-    """Stream answers as tokens are generated using Server-Sent Events (SSE).
-
-    Events emitted:
-    - event: status   {"stage": "retrieving" | "generating" | "verifying", "message": "..."}
-    - event: sources  {"sources": [...]}
-    - event: token    {"token": "..."}
-    - event: done     {"answer": "...", "sources": [...], "grounded": bool, "risk_score": float, "latency_ms": int}
-    - event: error    {"error": "...", "code": int}
-    """
+    """Stream answers as tokens are generated using Server-Sent Events (SSE)."""
     question = req.question
+    workspace_id = req.workspace_id or "default"
     provider_name = req.provider or x_llm_provider or "ollama"
     effective_api_key = req.api_key or x_llm_key
 
@@ -287,9 +296,18 @@ async def ask_stream(
             return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
         try:
+            # Check privacy rule
+            llm = get_llm_provider(
+                provider_name=provider_name,
+                model=req.model,
+                api_key=effective_api_key,
+                base_url=req.base_url,
+            )
+            check_workspace_privacy(workspace_id, llm)
+
             # 1. Retrieval Stage
-            yield sse_message("status", {"stage": "retrieving", "message": "Searching scheme documents..."})
-            chunks = retrieve(question, k=CONFIG.top_k)
+            yield sse_message("status", {"stage": "retrieving", "message": f"Searching workspace '{workspace_id}'..."})
+            chunks = retrieve(question, workspace_id=workspace_id, k=CONFIG.top_k)
 
             sources_payload = [
                 {
@@ -308,7 +326,7 @@ async def ask_stream(
                 answer = ABSTENTION_ANSWER
                 yield sse_message("token", {"token": answer})
                 latency_ms = int((time.perf_counter() - start_time) * 1000)
-                log_query(question=question, answer=answer, grounded=True, risk_score=0.0, latency_ms=latency_ms)
+                log_query(question=question, answer=answer, grounded=True, risk_score=0.0, latency_ms=latency_ms, workspace_id=workspace_id)
                 yield sse_message(
                     "done",
                     {
@@ -323,17 +341,13 @@ async def ask_stream(
 
             # 2. Generation Stage
             yield sse_message("status", {"stage": "generating", "message": f"Generating response with {provider_name}..."})
-            llm = get_llm_provider(
-                provider_name=provider_name,
-                model=req.model,
-                api_key=effective_api_key,
-                base_url=req.base_url,
-            )
-
             context_str = format_context(chunks)
-            user_prompt = f"Context passages:\n{context_str}\n\nQuestion: {question.strip()}"
+            messages = [
+                {"role": "system", "content": "You are TrustRAG, an assistant for Indian government welfare schemes. Answer directly and concisely based strictly on the context below. Cite sources as [chunk_id]."},
+                {"role": "user", "content": f"Context passages:\n{context_str}\n\nQuestion: {question.strip()}"},
+            ]
 
-            async for token in llm.astream(user_prompt):
+            async for token in llm.astream(messages):
                 if await raw_request.is_disconnected():
                     logger.info("Client disconnected from /ask/stream, stopping generation.")
                     return
@@ -357,6 +371,7 @@ async def ask_stream(
                 grounded=grounded,
                 risk_score=risk_score,
                 latency_ms=latency_ms,
+                workspace_id=workspace_id,
             )
 
             # 4. Completion Event
@@ -371,6 +386,8 @@ async def ask_stream(
                 },
             )
 
+        except PrivacyViolationError as exc:
+            yield sse_message("error", {"error": str(exc), "code": 403, "provider": provider_name})
         except LLMAuthError as exc:
             yield sse_message("error", {"error": str(exc), "code": 401, "provider": provider_name})
         except LLMRateLimitError as exc:

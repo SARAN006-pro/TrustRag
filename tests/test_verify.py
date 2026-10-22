@@ -10,7 +10,7 @@ from trustrag.config import CONFIG
 
 @pytest.fixture
 def sample_chunks():
-    chunks = retrieve("How much financial benefit is given under PM-KISAN?", k=CONFIG.top_k)
+    chunks = retrieve("How much financial benefit is given under PM-KISAN?", workspace_id="default", k=CONFIG.top_k)
     if not chunks:
         # Fallback if DB empty
         return [
